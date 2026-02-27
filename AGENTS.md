@@ -41,6 +41,7 @@ src/
   components/       # Reusable UI components (Button, Card, Modal, etc.)
   pages/            # Route-level page components (LoginPage, MapPage, AdminPage)
   hooks/            # Custom React hooks (useAuth, usePOIs, useMap, etc.)
+  api/              # Application API layer (POI, profile, photo, auth APIs)
   lib/              # Third-party client setup (supabaseClient.ts, mapConfig.ts)
   types/            # Shared TypeScript interfaces and types (poi.ts, user.ts, etc.)
   utils/            # Pure helper functions (formatDate, validateForm, etc.)
@@ -48,6 +49,16 @@ src/
   App.tsx           # Root component with router and auth provider
   main.tsx          # Vite entry point
 ```
+
+---
+
+## Architecture Rules
+
+- Enforce this call flow: **React file (page/component/hook) -> `src/api/*` -> DB client (`src/lib/supabaseClient.ts`)**.
+- React files must call API functions for data operations and must not query database tables directly.
+- All table queries/mutations (select/insert/update/delete) must live in the API layer.
+- The API layer is responsible for translating DB responses into typed return values used by hooks/components.
+- This separation of concerns is mandatory for maintainability, testability, and security consistency.
 
 ---
 
@@ -95,6 +106,7 @@ const poi: any = await supabase.from('pois').select('*');
 
 - Custom hooks live in `src/hooks/`, named `use<Something>.ts`.
 - Hooks must have a single, clear responsibility.
+- Hooks can orchestrate UI state and lifecycle, but data access must be delegated to API-layer functions.
 - Always handle loading, error, and success states explicitly.
 
 ```ts
@@ -107,7 +119,7 @@ const { data, loading, error } = usePOIs();
 ## Supabase Rules
 
 - The Supabase client is initialized once in `src/lib/supabaseClient.ts` and imported everywhere — never re-initialize.
-- All DB interactions go through custom hooks, not directly in components.
+- All DB interactions go through `src/api/` modules. React files (components/pages/hooks) must never access Supabase tables directly.
 - Always check and handle Supabase error responses — never silently swallow errors.
 - Row Level Security (RLS) is the enforcement layer — never rely on frontend logic alone to restrict data access.
 - Storage URLs must be retrieved via `supabase.storage.from('photos').getPublicUrl(path)` — never hardcode storage URLs.
@@ -177,6 +189,17 @@ const { data, loading, error } = usePOIs();
 
 ---
 
+## Testing Rules
+
+- Use **Jest** for all unit tests in this project.
+- Unit tests are required for API calls, `lib/` calls, and any code that runs on the server side.
+- Enforce a minimum of **85% line coverage** for those unit tests.
+- **99%+ line coverage is strongly preferred** and should be treated as the target for touched server/API/lib code.
+- Do **not** write unit tests for explicitly client-side React UI code (for example: files in `src/pages/` and React component files in `src/components/`).
+- Coverage enforcement must apply to server/API/lib test targets, not client-side page/component targets.
+
+---
+
 ## Environment Variables
 
 - All secrets and config live in `.env.local` (never committed).
@@ -213,3 +236,4 @@ const { data, loading, error } = usePOIs();
 - Do not create barrel `index.ts` files unless the folder has 4+ exports.
 - Do not hardcode Catoctin park coordinates — store them as named constants in `src/lib/mapConfig.ts`.
 - Do not make Supabase calls directly inside JSX or event handlers — always delegate to a hook or util.
+- Do not query or mutate the database from any React file (`pages/`, `components/`, or hooks). Use the API layer.
